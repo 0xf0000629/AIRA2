@@ -24,6 +24,8 @@ class arrangement final {
     size_t _capacity;
 
     public:
+
+    // make empty arrangement
     arrangement(size_t capacity) : data(nullptr), _size(0), _capacity(capacity)
     {
         if (_capacity > SIZE_MAX/sizeof(T)) throw std::logic_error("Arrangement is too big.");
@@ -33,6 +35,8 @@ class arrangement final {
         if (!data) throw std::logic_error("Couldn't allocate the data for new arrangement.");
     }
 
+    // make arrangement and copy the element to every element
+    // for lvalues (and everything else)
     arrangement(size_t capacity, const T& value)
     : data(nullptr), _size(0), _capacity(capacity)
     {
@@ -55,6 +59,7 @@ class arrangement final {
         }
     }
 
+    // make arrangement from another thing
     arrangement(const arrangement& other)
     : data(nullptr), _size(0), _capacity(other._capacity)
     {
@@ -77,6 +82,7 @@ class arrangement final {
         }
     }
 
+    // destroy it
     ~arrangement() {
         for (size_t i=0; i<_size; i++)
             data[i].~T();
@@ -84,6 +90,7 @@ class arrangement final {
         std::free(data);
     }
 
+    // assign one arrangement to another
     arrangement& operator=(const arrangement& other) {
         if (this == &other) return *this;
 
@@ -95,6 +102,7 @@ class arrangement final {
         return *this;
     }
 
+    // iterator
     class Iterator {
         private:
         arrangement* parent;
@@ -116,6 +124,7 @@ class arrangement final {
         return Iterator(this, _size-1, false);
     }
 
+    // iterator const
     class ConstIterator {
         private:
         const arrangement* parent;
@@ -137,6 +146,7 @@ class arrangement final {
     }
 
 
+    // expand when it's too big
     void grow() {
         size_t new_capacity = (_capacity == 0) ? 1 : _capacity*2;
 
@@ -147,14 +157,14 @@ class arrangement final {
         if (!new_data) throw std::bad_alloc();
         if (!data) throw std::logic_error("Couldn't allocate the data for grown arrangement.");
 
-        size_t constructed=0;
+        size_t ctrd=0;
 
         try {
-            for (; constructed<_size; ++constructed)
-                relocate(new_data, constructed, data[constructed]);
+            for (; ctrd<_size; ++ctrd)
+                relocate(new_data, ctrd, data[ctrd]);
         }
         catch (...) {
-            for (size_t i=0; i<constructed; i++)
+            for (size_t i=0; i<ctrd; i++)
                 new_data[i].~T();
 
             std::free(new_data);
@@ -170,17 +180,19 @@ class arrangement final {
         _capacity = new_capacity;
     }
 
+    // forward the incoming constructor?? into the positioning move
     template<typename... Args>
     void make(size_t index, Args&&... args) {
         new (&data[index]) T(std::forward<Args>(args)...);
     }
 
+    // trait test to check if this class might throw something
     template<typename IT>
     void relocate(T* destination, size_t index, IT& item) {
-        if constexpr (std::is_nothrow_move_constructible_v<T>) {
+        if constexpr (std::is_nothrow_move_constructible_v<IT&&>) {
             new (&destination[index]) T(std::move(item));
         }
-        else if constexpr (std::is_copy_constructible_v<T>) {
+        else if constexpr (std::is_copy_constructible_v<IT&>) {
             new (&destination[index]) T(item);
         }
         else {
@@ -188,6 +200,7 @@ class arrangement final {
         }
     }
 
+    // destroy something at index
     void wipe(size_t index) {
         data[index].~T();
     }
@@ -200,16 +213,17 @@ class arrangement final {
         return _capacity;
     }
 
+    // address at index
     T& operator[](size_t index) {
-        //if (index >= _size) throw std::out_of_range("Index out of range.");
         return data[index];
     }
 
+    // address constant at index?
     const T& operator[](size_t index) const {
-        //if (index >= _size) throw std::out_of_range("Index out of range.");
         return data[index];
     }
 
+    // only for rvalues (constants, moves)
     size_t insert(size_t index, T&& item){
         if (index > _size) throw std::out_of_range("Index out of range");
         if (_size == _capacity) grow();
@@ -224,6 +238,7 @@ class arrangement final {
         return index;
     }
 
+    // for lvalues (but actually pretty much anything)
     size_t insert(size_t index, const T& item){
         if (index > _size) throw std::out_of_range("Index out of range");
         if (_size == _capacity) grow();
@@ -238,6 +253,7 @@ class arrangement final {
         return _size;
     }
 
+    // for poiners
     size_t insert(size_t index, const T* item) {
         if (item == nullptr)
             throw std::invalid_argument("Pointer is null.");
@@ -245,6 +261,7 @@ class arrangement final {
         return insert(index, *item);
     }
 
+    // remove things
     void remove(size_t index) {
         if (index >= _size) throw std::out_of_range("Index out of range");
 
@@ -258,13 +275,17 @@ class arrangement final {
         --_size;
     }
 
+    // remove when no argument
     void remove(){
         remove(_size-1);
     }
 
+    // allocated bytes
     size_t bytes() const {
         return _capacity * sizeof(T);
     }
+
+    // allocated bytes but all of it
     size_t deepbytes() const {
         size_t total = _capacity * sizeof(T);
         if constexpr (is_arrangement<T>::value) {
